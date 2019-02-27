@@ -8,6 +8,7 @@
 #include <list>
 
 using boost::asio::ip::tcp;
+using TableRow = std::pair<int, std::string>;
 using TableData = std::map<int, std::string>;
 using Command = std::vector<std::string>;
 
@@ -52,16 +53,37 @@ public:
     Table(std::string tableName)
         : m_tableName(tableName)
     {
-#ifdef _DEBUG
-        std::cout << "Table " << m_tableName << " " << this << std::endl;
-#endif
+
     }
 
     ~Table()
     {
-#ifdef _DEBUG
-        std::cout << "~Table " << m_tableName << " " << this << std::endl;
-#endif
+
+    }
+
+    auto insert(TableRow row)
+    {
+        std::cout << m_tableName << " " << row.first << " " << row.second << std::endl;
+
+        if (m_data.find(row.first) != m_data.end())
+        {
+            return std::make_tuple("duplicate " + std::to_string(row.first), false);
+        }
+
+        m_data.insert(row);
+
+        return std::make_tuple(std::string(), true);
+    }
+
+    auto truncate()
+    {
+        m_data.clear();
+        return std::make_tuple(std::string(), true);
+    }
+
+    TableData &tableData()
+    {
+        return m_data;
     }
 
 private:
@@ -111,6 +133,9 @@ public:
 
             CommandCode commandCode = m_commandsMap.at(command.at(0));
 
+            std::string subErrorText;
+            bool subResultSuccess;
+
             switch (commandCode) {
             case Insert:
             {
@@ -119,6 +144,15 @@ public:
                     resultsHandler("Wrong format", false, true);
                     continue;
                 }
+
+                if (m_tables.find(command.at(1)) == m_tables.end() )
+                {
+                    resultsHandler("Table doesn't exists", false, true);
+                    continue;
+                }
+
+                std::tie(subErrorText, subResultSuccess) = m_tables.at(command.at(1)).insert(TableRow(std::atoi(command.at(2).c_str()), command.at(3)));
+                resultsHandler(subErrorText, subResultSuccess, true);
                 break;
             }
             case Truncate:
@@ -128,6 +162,9 @@ public:
                     resultsHandler("Wrong format", false, true);
                     continue;
                 }
+
+                std::tie(subErrorText, subResultSuccess) = m_tables.at(command.at(1)).truncate();
+                resultsHandler(subErrorText, subResultSuccess, true);
                 break;
             }
             case Intersection:
@@ -137,6 +174,29 @@ public:
                     resultsHandler("Wrong format", false, true);
                     continue;
                 }
+
+                auto il = m_tables.at("A").tableData().begin();
+                auto ir = m_tables.at("B").tableData().begin();
+                while (il != m_tables.at("A").tableData().end() && ir != m_tables.at("B").tableData().end())
+                {
+                    if (il->first < ir->first)
+                    {
+                        ++il;
+                    }
+                    else if (ir->first < il->first)
+                    {
+                        ++ir;
+                    }
+                    else
+                    {
+                        resultsHandler(std::to_string(il->first) + "," + il->second + "," + ir->second, true, false);
+                        ++il;
+                        ++ir;
+                    }
+                }
+
+                resultsHandler(std::string(), true, true);
+
                 break;
             }
             case SymmetricDifference:
@@ -146,6 +206,42 @@ public:
                     resultsHandler("Wrong format", false, true);
                     continue;
                 }
+
+                auto il = m_tables.at("A").tableData().begin();
+                auto ir = m_tables.at("B").tableData().begin();
+                while (il != m_tables.at("A").tableData().end() || ir != m_tables.at("B").tableData().end())
+                {
+                    std::cout << std::to_string(il->first) << "/" << std::to_string(m_tables.at("A").tableData().size()) << " / " << il->second << " - " << std::to_string(ir->first) << std::endl;
+                    if (il->first < ir->first)
+                    {
+                        if (il != m_tables.at("A").tableData().end())
+                        {
+                            resultsHandler(std::to_string(il->first) + "," + il->second + ",", true, false);
+                            ++il;
+                        }
+                        else
+                        {
+                            resultsHandler(std::to_string(ir->first) + "," + "," + ir->second, true, false);
+                            if (ir != m_tables.at("B").tableData().end())
+                                ++ir;
+                        }
+                    }
+                    else
+                    {
+                        if (il != m_tables.at("A").tableData().end())
+                            ++il;
+                        else
+                            resultsHandler(std::to_string(ir->first) + "," + "," + ir->second, true, false);
+
+                        if (ir != m_tables.at("B").tableData().end())
+                            ++ir;
+                        else
+                            resultsHandler(std::to_string(il->first) + "," + il->second + ",", true, false);
+                    }
+                }
+
+                resultsHandler(std::string(), true, true);
+
                 break;
             }
             default:
@@ -160,8 +256,8 @@ private:
 #ifdef _DEBUG
         std::cout << "Database " << this << std::endl;
 #endif
-        m_tables.insert(std::pair<std::string, Table>("A", Table("A")));
-        m_tables.insert(std::pair<std::string, Table>("B", Table("B")));
+
+        m_tables = { {"A", std::move(Table("A")) }, {"B", std::move(Table("B")) } };
 
         m_commandsMap.insert(std::pair<std::string, CommandCode>("INSERT", Insert));
         m_commandsMap.insert(std::pair<std::string, CommandCode>("TRUNCATE", Truncate));
@@ -192,12 +288,12 @@ public:
     Session(boost::asio::io_service& io_service)
         : m_socket(io_service)
     {
-        //m_asyncHandler = async::connect(bulkSize);
+
     }
 
     ~Session()
     {
-        //async::disconnect(m_asyncHandler);
+
     }
 
     tcp::socket& socket()
@@ -235,7 +331,7 @@ public:
     {
         if (!error)
         {
-            Database::instance().parse(m_data, bytes_transferred, [this](std::string result, bool isOk, bool finish)
+            Database::instance().parse(m_data, bytes_transferred, [this, bytes_transferred](std::string result, bool isOk, bool finish)
             {
                 if (!finish)
                 {
@@ -245,7 +341,13 @@ public:
                 {
                     if (isOk)
                     {
+#ifdef _DEBUG
+                        std::string debugStr = std::string(m_data, bytes_transferred);
+                        debugStr = trim(debugStr);
+                        write("OK '" + debugStr + "'", true, false);
+#else
                         write("OK", true, false);
+#endif
                     }
                     else
                     {
@@ -325,6 +427,7 @@ private:
     tcp::acceptor m_acceptor;
 };
 
+//example: ./telnet_test.sh | telnet localhost 9000
 int main(int argc, char * argv[]) {
     try
     {
