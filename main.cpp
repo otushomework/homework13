@@ -1,6 +1,6 @@
 #include <iostream>
 
-#define _DEBUG
+//#define _DEBUG
 
 #include <iostream>
 #include <boost/asio.hpp>
@@ -63,7 +63,7 @@ public:
 
     auto insert(TableRow row)
     {
-        std::cout << m_tableName << " " << row.first << " " << row.second << std::endl;
+        //std::cout << m_tableName << " " << row.first << " " << row.second << std::endl;
 
         if (m_data.find(row.first) != m_data.end())
         {
@@ -211,7 +211,7 @@ public:
                 auto ir = m_tables.at("B").tableData().begin();
                 while (il != m_tables.at("A").tableData().end() || ir != m_tables.at("B").tableData().end())
                 {
-                    std::cout << std::to_string(il->first) << "/" << std::to_string(m_tables.at("A").tableData().size()) << " / " << il->second << " - " << std::to_string(ir->first) << std::endl;
+                    //std::cout << std::to_string(il->first) << "/" << std::to_string(m_tables.at("A").tableData().size()) << " / " << il->second << " - " << std::to_string(ir->first) << std::endl;
                     if (il->first < ir->first)
                     {
                         if (il != m_tables.at("A").tableData().end())
