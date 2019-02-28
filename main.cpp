@@ -226,6 +226,20 @@ public:
                                 ++ir;
                         }
                     }
+                    else if (ir->first < il->first)
+                    {
+                        if (ir != m_tables.at("B").tableData().end())
+                        {
+                            resultsHandler(std::to_string(ir->first) + "," + "," + ir->second, true, false);
+                            ++ir;
+                        }
+                        else
+                        {
+                            resultsHandler(std::to_string(il->first) + "," + il->second + ",", true, false);
+                            if (il != m_tables.at("A").tableData().end())
+                                ++il;
+                        }
+                    }
                     else
                     {
                         if (il != m_tables.at("A").tableData().end())
