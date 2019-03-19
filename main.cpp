@@ -302,12 +302,17 @@ public:
     Session(boost::asio::io_service& io_service)
         : m_socket(io_service)
     {
-
+#ifdef _DEBUG
+        std::cout << "Session " << this << std::endl;
+#endif
     }
 
     ~Session()
     {
-
+#ifdef _DEBUG
+        std::cout << "~Session " << this << std::endl;
+#endif
+        m_socket.close();
     }
 
     tcp::socket& socket()
@@ -374,7 +379,8 @@ public:
         }
         else
         {
-            delete this;
+            std::cout << "Read failed: " << error.message() << ": " << error.value() <<  std::endl;
+            close();
         }
     }
 
@@ -390,7 +396,8 @@ public:
         }
         else
         {
-            delete this;
+            std::cout << "Write finish failed: " << error.message() << ": " << error.value() <<  std::endl;
+            close();
         }
     }
 
@@ -398,7 +405,18 @@ public:
     void handleWriteProgress(const boost::system::error_code& error)
     {
         if (error)
+        {
+            std::cout << "Write progress failed: " << error.message() << ": " << error.value() <<  std::endl;
+            close();
+        }
+    }
+
+    void close()
+    {
+        static bool closed = false;
+        if (!closed)
             delete this;
+        closed = true;
     }
 private:
     tcp::socket m_socket;
@@ -441,7 +459,8 @@ private:
     tcp::acceptor m_acceptor;
 };
 
-//example: ./telnet_test.sh | telnet localhost 9000
+//join_server 9000
+//./telnet_test.sh | telnet localhost 9000
 int main(int argc, char * argv[]) {
     try
     {
@@ -451,6 +470,7 @@ int main(int argc, char * argv[]) {
             return 1;
         }
 
+        Database::instance();
         boost::asio::io_service io_service;
 
         using namespace std;
